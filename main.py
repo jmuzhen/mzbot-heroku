@@ -43,6 +43,7 @@ while True:
         import shutil
         import string
         import atexit
+        import json
         
         # for mobile status:
         import ast
@@ -64,9 +65,6 @@ while True:
         
         import mzhelp
         import mzutils
-        
-        # for replit config:
-        import replit
         
         # for shell:
         import subprocess
@@ -92,44 +90,69 @@ while True:
         os.system("pip install -r requirements.txt")
 
 
-def replitWrite(key: str, value):
+def Write(key: str, value):
     """
     key has to be a string, value can be any value(s).
     However, value has to be JS-serializable.
     """
+    d = None
+    # Open storage file
+    with open("storage.txt", "r") as f:
+        d = json.loads(f.read())
+        d[key] = value
+    f.close()
     
-    replit.db[key] = value
+    # Write to storage file
+    with open("storage.txt", "w") as f:
+        # completely erase the file and replace it with d
+        f.write(str(d))
+    f.close()
 
 
-def replitDelete(key: str):
+def Delete(key: str):
     """
-    Deletes a key-value pair from the Replit Database.
+    Deletes a key-value pair from the Database.
     """
-    replit.db.__delitem__(key)
+    d = None
+    # Open storage file
+    with open("storage.txt", "r") as f:
+        d = json.loads(f.read())
+        del d[key]
+    f.close()
     
-    # alternate:
-    # del replit.db[key]
+    # Write to storage file
+    with open("storage.txt", "w") as f:
+        f.write(str(d))
+    f.close()
 
 
-def replitRead(key: str):
+def Read(key: str):
     """
-    Gets a value from the Replit Database.
+    Gets a value from the Database.
     """
-    try:
-        return replit.db[key]
-    except KeyError:
-        """Accessing a non-existent key will raise KeyError."""
-        return None
+    d = None
+    
+    # Open storage file
+    with open("storage.txt", "r") as f:
+        d = json.loads(f.read())
+    f.close()
+    
+    return d[key]
 
 
-def replitGetAllKeys():
+def GetAllKeys():
     """
-    Returns all the keys from Replit Database.
+    Returns all the keys from the Database.
     """
-    try:
-        return replit.db.keys()
-    except Exception:
-        return None
+    d = None
+    
+    # Open storage file
+    with open("storage.txt", "r") as f:
+        d = json.loads(f.read())
+    f.close()
+    
+    return list(d.keys())
+    
 
 
 def removeprefix(s, prefix):
@@ -151,13 +174,13 @@ def removesuffix(s, suffix):
     return s
 
 
-def replitInit(key: str, value):
+def Init(key: str, value):
     """
     Initialize a variable if it has not been initialized before.
     (i.e. if the key doesn't exist yet)
     """
-    if replitGetAllKeys() is None or key not in replitGetAllKeys():
-        replitWrite(key, value)
+    if GetAllKeys() is None or key not in GetAllKeys():
+        Write(key, value)
 
 
 def truncate(s: str):
@@ -211,37 +234,46 @@ def openAItokens(text: str):
     return int(len(text.split()) * 4 / 3 + text.count(string.punctuation))
 
 
+# Check if storage.txt exists
+if not os.path.exists("./storage.txt"):
+    with open("storage.txt", "w") as f:
+        f.write("{}")
+    f.close()
+    
 # status checks
-if replitRead("EXITCODE") == 0:
-    replitWrite("EXITCODE", 1)
-    exit()
+try:
+    if Read("EXITCODE") == 0:
+        Write("EXITCODE", 1)
+        exit()
+except KeyError:
+    pass
 
 # Setting variables
-replitWrite("EXITCODE", 1)
-replitInit("afk", {})
+Write("EXITCODE", 1)
+Init("afk", {})
 antinuke = []
 bansdict = {}
-replitInit("snipes", {})
-replitInit("esnipes", {})
-replitInit("optoutlist", [])
+Init("snipes", {})
+Init("esnipes", {})
+Init("optoutlist", [])
 uptime = 0
-replitInit("hardmutes", [])
+Init("hardmutes", [])
 ownerid = 926410988738183189
 istyping = []
-replitInit("msgpings", {})
+Init("msgpings", {})
 musicDict = {}
 bannedWords = mzutils.bannedWords
-replitInit("gwended", [])
-replitInit("tickets", '')
+Init("gwended", [])
+Init("tickets", '')
 MAX_INT = 2147483647  # max int32 size
-replitWrite("stockfish_installed", False)
-replitInit("stickies", [])
+Write("stockfish_installed", False)
+Init("stickies", [])
 
 # clear storage in database
-if len(replitRead("snipes")) > 1000:
-    replitWrite("snipes", {})
-if len(replitRead("esnipes")) > 1000:
-    replitWrite("esnipes", {})
+if len(Read("snipes")) > 1000:
+    Write("snipes", {})
+if len(Read("esnipes")) > 1000:
+    Write("esnipes", {})
 
 
 # load_dotenv()
@@ -330,17 +362,16 @@ async def on_ready():
 
 @bot.event
 async def on_disconnect():
-    EXITCODE = replitRead("EXITCODE")
+    EXITCODE = Read("EXITCODE")
     if EXITCODE != 0:
-        os.system("kill 1")
-        # "kill 1" restarts the container and will automatically re-run the script.
-
+        # restart the python script
+        os.execl(sys.executable, sys.executable, *sys.argv)
 
 def exit_handler():
     # same as on_disconnect()
-    EXITCODE = replitRead("EXITCODE")
+    EXITCODE = Read("EXITCODE")
     if EXITCODE != 0:
-        os.system("kill 1")
+        os.execl(sys.executable, sys.executable, *sys.argv)
 
 
 # error handling
@@ -399,9 +430,9 @@ async def on_message(message):
     
     # --- INIT ---
     
-    afkdict = replitRead("afk")
-    hardmutes = replitRead("hardmutes")
-    msgpings = replitRead("msgpings")
+    afkdict = Read("afk")
+    hardmutes = Read("hardmutes")
+    msgpings = Read("msgpings")
     global bannedWords
     
     if message.content.strip() == f"<@{bot.user.id}>":
@@ -448,7 +479,7 @@ You were AFK for {afklen}""")
             
             await asyncio.sleep(7.5)
             await welcomebackmsg.delete()
-        replitWrite("afk", afkdict)  # update afkdict
+        Write("afk", afkdict)  # update afkdict
     
     for member in message.mentions:
         if not message.author.bot:
@@ -465,7 +496,7 @@ You were AFK for {afklen}""")
         
     # --- STICKIED MESSAGES ---
     if message.guild is not None and message.guild.id in moderation_rules.whitelist_servers: # feature only available in whitelisted servers
-        stickies = replitRead("stickies")
+        stickies = Read("stickies")
         for entry in stickies:
             # only one entry per channel, so we break after the first occurrence
             if entry[0] == message.channel.id:
@@ -475,7 +506,7 @@ You were AFK for {afklen}""")
                     await message.channel.send(f"`[STICKIED]` {msg}")
                     entry[2] = 0  # we reset the counter, setting to 0 not -1,
                                   # because we send the sticky message before incrementing the counter
-                replitWrite("stickies", stickies)
+                Write("stickies", stickies)
                 
                 # delete the last sticky message if it exists
                 async for m in message.channel.history():
@@ -510,7 +541,7 @@ def processTextFromEmbed(message, msg):
 
 @bot.event
 async def on_message_delete(message):
-    snipes = replitRead("snipes")
+    snipes = Read("snipes")
     msg = message.content
     author = message.author
     
@@ -524,12 +555,12 @@ async def on_message_delete(message):
         ]
     
     snipes[len(snipes)] = stringify(lst)
-    replitWrite("snipes", snipes)
+    Write("snipes", snipes)
 
 
 @bot.event
 async def on_message_edit(old, new):
-    esnipes = replitRead("esnipes")
+    esnipes = Read("esnipes")
     oldmsg = old.content
     newmsg = new.content
     author = new.author
@@ -544,7 +575,7 @@ async def on_message_edit(old, new):
         ]
     
     esnipes[len(esnipes)] = stringify(lst)
-    replitWrite("esnipes", esnipes)
+    Write("esnipes", esnipes)
 
 
 # Error handling
@@ -909,7 +940,7 @@ async def shutdown(ctx):
         await msg.delete()
         return
     
-    replitWrite("EXITCODE", 0)
+    Write("EXITCODE", 0)
     
     # quit()
     await ctx.send("`Shutdown executing...`")
@@ -940,7 +971,7 @@ async def restart(ctx):
         await msg.delete()
         return
     
-    replitWrite("EXITCODE", 0)
+    Write("EXITCODE", 0)
     
     await ctx.send("`Restart executing...`")
     
@@ -1274,7 +1305,7 @@ DMSPAM_PERMS = [ownerid, 717167678347018320]
 
 @bot.command(aliases=['dm', 'dms', 'dmsend'])
 async def dmspam(ctx, number_of_times: int, user: discord.Member, *, message):
-    optoutlist = replitRead("optoutlist")
+    optoutlist = Read("optoutlist")
     
     if ctx.author.id not in DMSPAM_PERMS:
         await ctx.channel.send("Omg who are you trying to spam?! noob")
@@ -1353,14 +1384,14 @@ Guild: `{ctx.guild.name}`"""
 
 @bot.command(aliases=['optoutspam'])
 async def optout_spam(ctx):
-    optoutlist = replitRead("optoutlist")
+    optoutlist = Read("optoutlist")
     
     if ctx.author.id in optoutlist:
         await ctx.channel.send(
             "You are already in the opt-out list! If you wish to opt in again, use the command `.optin_spam`!")
     else:
         optoutlist.append(ctx.author.id)
-        replitWrite("optoutlist", optoutlist)
+        Write("optoutlist", optoutlist)
         
         await ctx.channel.send(
             "You have opted out for spam! If you wish to opt in again, use the command `.optin_spam`!")
@@ -1368,14 +1399,14 @@ async def optout_spam(ctx):
 
 @bot.command(aliases=['optinspam'])
 async def optin_spam(ctx):
-    optoutlist = replitRead("optoutlist")
+    optoutlist = Read("optoutlist")
     
     if str(ctx.author.id) not in optoutlist:
         await ctx.channel.send(
             "You are already opted in for spam! If you wish to opt out, use the command `.optout_spam`!")
     else:
         optoutlist.remove(ctx.author.id)
-        replitWrite("optoutlist", optoutlist)
+        Write("optoutlist", optoutlist)
         await ctx.channel.send(
             "You have opted in for spam! If you wish to opt out again, use the command `.optout_spam`!")
 
@@ -1695,7 +1726,7 @@ async def purge(ctx, amount: int):
 @commands.cooldown(1, 3, commands.BucketType.user)
 @bot.command()
 async def afk(ctx, *, reason='AFK'):
-    afkdict = replitRead("afk")
+    afkdict = Read("afk")
     afkdict[str(ctx.author.id)] = [reason, str(int(datetime.datetime.utcnow().timestamp()))]
     await ctx.message.delete()
     msg1 = await ctx.send(f"{ctx.author.mention}, I set your AFK: {reason}")
@@ -1704,7 +1735,7 @@ async def afk(ctx, *, reason='AFK'):
     except Exception:
         pass
     
-    replitWrite("afk", afkdict)
+    Write("afk", afkdict)
 
 
 @bot.command()
@@ -1715,7 +1746,7 @@ async def setafk(ctx, user: discord.Member, *, reason='AFK'):
         await ctx.message.delete()
         return
     
-    afkdict = replitRead("afk")
+    afkdict = Read("afk")
     afkdict[str(user.id)] = [reason, str(int(datetime.datetime.utcnow().timestamp()))]
     await ctx.message.delete()
     msg1 = await ctx.send(f"{user.mention}, I set your AFK: {reason}")
@@ -1724,12 +1755,12 @@ async def setafk(ctx, user: discord.Member, *, reason='AFK'):
     except Exception:
         pass
     
-    replitWrite("afk", afkdict)
+    Write("afk", afkdict)
 
 
 @bot.command(aliases=['cancelafk', 'afkremove'])
 async def removeafk(ctx, *, member: discord.Member = None):
-    afkdict = replitRead("afk")
+    afkdict = Read("afk")
     
     if member is None:
         member = ctx.author
@@ -1755,7 +1786,7 @@ async def removeafk(ctx, *, member: discord.Member = None):
             return
     
     await ctx.send(f"AFK status removed for `{member}`")
-    replitWrite("afk", afkdict)
+    Write("afk", afkdict)
 
 
 @bot.command(aliases=['version', 'info'])
@@ -1957,7 +1988,7 @@ async def ticket(ctx):
             member: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
         
-        lines = replitRead("tickets")
+        lines = Read("tickets")
         
         if str(user.id) in lines:
             errormsg = await ctx.send(f"{user.mention}, You already have a ticket open!")
@@ -1973,7 +2004,7 @@ async def ticket(ctx):
             await channel.send(embed=embed)
             
             lines += f"{user.id}\n"
-            replitWrite("tickets", lines)
+            Write("tickets", lines)
 
 
 @commands.cooldown(1, 5, commands.BucketType.channel)
@@ -2003,9 +2034,9 @@ React with 👍 to delete.""")
         await ctx.send("Deleting channel...")
         await ctx.channel.delete()
         
-        lines: str = replitRead("tickets")
+        lines: str = Read("tickets")
         lines.replace(f"{ctx.author.id}\n", "")
-        replitWrite("tickets", lines)
+        Write("tickets", lines)
     
     else:
         await ctx.reply("This is not your ticket!")
@@ -2119,7 +2150,7 @@ async def membercount(ctx):
 
 @bot.command(aliases=['sniper'])
 async def snipe(ctx, pos: int = 1):
-    snipes = replitRead("snipes")  # returns a dictionary.
+    snipes = Read("snipes")  # returns a dictionary.
     
     success1 = False
     success2 = False
@@ -2176,7 +2207,7 @@ Deleted <t:{lst[4]}:R>
 
 @bot.command(aliases=['editsniper'])
 async def esnipe(ctx, pos: int = 1):
-    esnipes = replitRead("esnipes")
+    esnipes = Read("esnipes")
     
     success1 = False
     success2 = False
@@ -2415,7 +2446,7 @@ async def timer(ctx, duration, *, item=' '):
 
 @bot.command(aliases=['forcemute', 'fullmute', 'shutup'])
 async def hardmute(ctx, person: discord.Member):
-    hardmutes = replitRead("hardmutes")
+    hardmutes = Read("hardmutes")
     
     if not ctx.author.id == ownerid:
         await ctx.message.delete()
@@ -2426,12 +2457,12 @@ async def hardmute(ctx, person: discord.Member):
             hardmutes.append(person.id)
             await ctx.message.delete()
     
-    replitWrite("hardmutes", hardmutes)
+    Write("hardmutes", hardmutes)
 
 
 @bot.command(aliases=['forceunmute', 'fullunmute'])
 async def hardunmute(ctx, person: discord.Member):
-    hardmutes = replitRead("hardmutes")
+    hardmutes = Read("hardmutes")
     
     if not ctx.author.id == ownerid:
         await ctx.message.delete()
@@ -2442,7 +2473,7 @@ async def hardunmute(ctx, person: discord.Member):
             hardmutes.remove(person.id)
             await ctx.message.delete()
     
-    replitWrite("hardmutes", hardmutes)
+    Write("hardmutes", hardmutes)
 
 
 @bot.command(aliases=['memberinfo'])
@@ -2628,7 +2659,7 @@ async def msgping(ctx, *, msg=None):
             or ctx.author.id == ownerid):
         return
     
-    msgpings = replitRead("msgpings")
+    msgpings = Read("msgpings")
     
     if msg is not None:
         msgpings[ctx.channel.id] = msg
@@ -2636,7 +2667,7 @@ async def msgping(ctx, *, msg=None):
         msgpings[ctx.channel.id] = None
     
     await ctx.message.delete()
-    replitWrite("msgpings", msgpings)
+    Write("msgpings", msgpings)
 
 
 # INIT MUSIC MODULE
@@ -3102,7 +3133,7 @@ React with 🎉 to enter the giveaway!""", timestamp=datetime.datetime.utcnow())
     else:
         winmsgfinal = "No valid entrants, so a winner could not be determined!"
     
-    ended = replitRead("gwended")
+    ended = Read("gwended")
     if msg.id not in ended:
         await ctx.send(winmsgfinal)
         gwembed.set_footer(text=f"Ended at {end}")
@@ -3187,7 +3218,7 @@ async def gend(ctx, id_: int):
             or ctx.author.id == ownerid):
         return
     
-    ended = replitRead("gwended")
+    ended = Read("gwended")
     if id_ not in ended:
         try:
             new_msg = await ctx.fetch_message(id_)
@@ -3202,7 +3233,7 @@ async def gend(ctx, id_: int):
         winner = random.choice(users)
         
         ended.append(id_)
-        replitWrite("gwended", ended)
+        Write("gwended", ended)
         
         await ctx.channel.send(f"🎉 Congratulations! The new winner is {winner.mention}! 🎉")
         
@@ -3269,13 +3300,6 @@ async def auditlogs(ctx, num: int = 20):
         await ctx.send(embed=embed)
 
 
-@bot.command()
-async def debug(ctx):
-    a = replit.db["a nonexistent key"]
-    print(a)
-    await ctx.send(a)
-
-
 @bot.command(aliases=['tempmute'])
 async def timeout(ctx, member: discord.Member, duration: str, *, reason: str = None):
     duration2 = mzutils.parseTime(duration)
@@ -3301,7 +3325,7 @@ async def gitupdate(ctx):
         await msg.delete()
         return
     
-    replitWrite("EXITCODE", 0)
+    Write("EXITCODE", 0)
 
     await ctx.send("Fetching latest changes...")
     
@@ -3429,34 +3453,34 @@ async def chessGame(ctx, *, params=None):
     if params is not None:
         if params == ('newgame' or 'new' or 'reset' or 'resign' or 'restart'):
             try:
-                replitDelete(f"chess {ctx.author.id}")
+                Delete(f"chess {ctx.author.id}")
             except:
                 # this means the user did not have an entry in the first place.
                 # we simply ignore this.
                 pass
             await ctx.reply("Game reset.")
     
-    if not replitRead("stockfish_installed"):
+    if not Read("stockfish_installed"):
         async with ctx.channel.typing():
             await ctx.send("Installing Stockfish... This may take a while.")
             
             # install stockfish
             os.system("chmod +x stockfish")
             
-            replitWrite("stockfish_installed", True)
+            Write("stockfish_installed", True)
     
     # initialise board
     board = None
     
     # check if there is a game in progress for the user
-    if replitRead(f"chess {ctx.author.id}") is not None:
+    if Read(f"chess {ctx.author.id}") is not None:
         # there is a game in progress
-        board = chess.Board(replitRead(f"chess {ctx.author.id}"))
+        board = chess.Board(Read(f"chess {ctx.author.id}"))
     
     # initialise the user's entry in the database
     else:
         board = chess.Board()
-        replitWrite(f"chess {ctx.author.id}", board.fen())  # note that the FEN is stored in the database
+        Write(f"chess {ctx.author.id}", board.fen())  # note that the FEN is stored in the database
     
     # prompt the user to make a move
     bot_msg = await ctx.reply(f"```{board.unicode()}```\n"
@@ -3486,11 +3510,11 @@ async def chessGame(ctx, *, params=None):
     # check if game over
     if board.is_game_over():
         await ctx.reply("Game over.")
-        replitDelete(f"chess {ctx.author.id}")
+        Delete(f"chess {ctx.author.id}")
         return
     
     # update the user's entry in the database
-    replitWrite(f"chess {ctx.author.id}", board.fen())
+    Write(f"chess {ctx.author.id}", board.fen())
     
     # make the bot's move
     async with ctx.channel.typing():
@@ -3518,7 +3542,7 @@ async def chessGame(ctx, *, params=None):
     
     # make the move on the board
     board.push_san(best_move)
-    replitWrite(f"chess {ctx.author.id}", board.fen())
+    Write(f"chess {ctx.author.id}", board.fen())
     
     # send the updated board to the user
     await ctx.reply(f"My move is `{best_move}`\n\n```{board.unicode()}```")
@@ -3526,7 +3550,7 @@ async def chessGame(ctx, *, params=None):
     # check if game over
     if board.is_game_over():
         await ctx.reply("Game over.")
-        replitDelete(f"chess {ctx.author.id}")
+        Delete(f"chess {ctx.author.id}")
         return
 
 
@@ -3572,10 +3596,10 @@ async def stick(ctx, *, message):
     if not ctx.author.guild_permissions.administrator:
         return
     
-    stickies = replitRead("stickies")
+    stickies = Read("stickies")
     stickies.append([ctx.channel.id, message, -1])  # ID, message, message counter (reset at 5)
                                                     # we set to -1 because the ctx.reply() message will increment it
-    replitWrite("stickies", stickies)
+    Write("stickies", stickies)
     
     m = await ctx.reply("Message successfully stickied! It will be sent for every 5 messages sent in this channel.")
     await asyncio.sleep(3)
@@ -3592,11 +3616,11 @@ async def unstick(ctx):
     if not ctx.author.guild_permissions.administrator:
         return
     
-    stickies = replitRead("stickies")
+    stickies = Read("stickies")
     for entry in stickies:
         if entry[0] == ctx.channel.id:
             stickies.remove(entry)
-            replitWrite("stickies", stickies)
+            Write("stickies", stickies)
             await ctx.reply("Message successfully unstickied for this channel!")
             return
         
@@ -3609,8 +3633,4 @@ keep_alive.keep_alive()  # keep bot alive
 
 atexit.register(exit_handler)  # handles exit
 
-try:
-    bot.run(TOKEN, reconnect=True)
-except:
-    os.system("kill 1")
-    # "kill 1" automatically runs the script.
+bot.run(TOKEN, reconnect=True)
